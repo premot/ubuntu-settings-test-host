@@ -3,8 +3,10 @@
 Creates a disposable Ubuntu Desktop VM using the supplied unattended-install configuration. It expects libvirt's default network, where the host is `192.168.122.1`.
 
 ```sh
-./spawn.sh /path/to/ubuntu-desktop.iso
+./spawn.sh
 ```
+
+The script downloads Ubuntu 24.04.3 Desktop on its first run and reuses the ISO afterward.
 
 The installed account is `test` with password `test`. After installation, open its display, clone and run the settings repository:
 

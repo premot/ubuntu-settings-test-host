@@ -1,6 +1,7 @@
 #!/bin/sh
 
-ISO=${1:?Usage: ./spawn.sh /path/to/ubuntu-desktop.iso}
+ISO=ubuntu-24.04.3-desktop-amd64.iso
+[ -f "$ISO" ] || curl -fLO "https://releases.ubuntu.com/24.04.3/$ISO"
 python3 -m http.server 3003 --directory seed --bind 0.0.0.0 &
 server=$!
 trap 'kill "$server"' EXIT INT TERM
