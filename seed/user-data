@@ -1,0 +1,10 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: ubuntu-settings-test
+    username: test
+    password: '$6$rounds=5000$ubuntu-settings-test$1nqJ9S.DAvlIJi7gIN5E0TgsFTuJz97kA4KgmW6CGX2u7tCvkm3aC04y4jdD9f1Kl5dwyUKUwS7BU6jlER1L9.'
+  storage:
+    layout:
+      name: direct
