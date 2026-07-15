@@ -4,7 +4,7 @@ autoinstall:
   identity:
     hostname: ubuntu-settings-test
     username: test
-    password: '$6$rounds=5000$ubuntu-settings-test$1nqJ9S.DAvlIJi7gIN5E0TgsFTuJz97kA4KgmW6CGX2u7tCvkm3aC04y4jdD9f1Kl5dwyUKUwS7BU6jlER1L9.'
+    password: '$6$ehIlvcvIzYhc3lRc$lDmNZSpYRvF5buvIzATklW7bD2NSY6HsfSVJmawui25SM/NIrdQ5vR/KgOV/IRAM5.WwNWFod93iqpzNgjPMA0'
   storage:
     layout:
       name: direct
