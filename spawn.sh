@@ -7,10 +7,26 @@ for command in curl python3 virt-install virsh qemu-system-x86_64; do
 done
 
 if [ "$missing" ]; then
-  sudo apt-get update
-  sudo apt-get install -y curl python3 virtinst libvirt-daemon-system qemu-system-x86
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y curl python3 virtinst libvirt-daemon-system qemu-system-x86
+  else
+    echo "Missing dependencies. On NixOS, run ./spawn-nixos.sh after enabling virtualisation.libvirtd." >&2
+    exit 1
+  fi
 fi
 sudo systemctl enable --now libvirtd
+
+# virt-install extracts --location kernels here. Some NixOS libvirt setups do
+# not create this conventional directory, causing its transient "boot" pool
+# to fail even though all packages are installed.
+sudo install -d -m 0755 -o root -g root /var/lib/libvirt/boot
+
+# The unattended installer and seed URL require libvirt's default NAT network.
+sudo virsh -c qemu:///system net-autostart default >/dev/null
+if ! sudo virsh -c qemu:///system net-info default | grep -q '^Active:.*yes'; then
+  sudo virsh -c qemu:///system net-start default >/dev/null
+fi
 
 ISO=ubuntu-24.04.4-desktop-amd64.iso
 if [ ! -f "$ISO" ]; then
