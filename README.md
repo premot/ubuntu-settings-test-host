@@ -38,6 +38,69 @@ Restore it to repeat a test:
 sudo virsh snapshot-revert ubuntu-settings-test before-setup
 ```
 
+## Remove an old VM before spawning another
+
+`spawn.sh` always uses the domain name `ubuntu-settings-test`. An old domain
+with that name will prevent `virt-install` from creating a replacement. Use the
+cleanup helper before starting over:
+
+```sh
+./cleanup-vm.sh
+./spawn.sh
+```
+
+The helper shows the disks it found and forcibly only `ubuntu-settings-test`, removes its
+libvirt definition, snapshots, managed-save/NVRAM state, and file-backed disks.
+It does not touch other VMs, the Ubuntu installer ISO, the seed files, or the
+libvirt `default` network.
+
+If an old `spawn.sh` terminal is still running, stop it with `Ctrl-C` first so
+its temporary seed HTTP server releases TCP port 3003.
+
+### Manual clean-slate reset
+
+The following is the manual equivalent. These commands permanently destroy the
+VM and all data in its attached writable disks. Inspect the disk list **before**
+deleting anything:
+
+```sh
+VM=ubuntu-settings-test
+sudo virsh -c qemu:///system domblklist "$VM" --details
+
+# Stop the guest (an error merely means it was already stopped).
+sudo virsh -c qemu:///system destroy "$VM" || true
+sudo virsh -c qemu:///system managedsave-remove "$VM" || true
+
+# Remove the definition and snapshot/NVRAM metadata. On an older libvirt,
+# remove unsupported flags and retry.
+sudo virsh -c qemu:///system undefine "$VM" --snapshots-metadata --nvram
+
+# Delete the disk path(s) shown as Type=file and Device=disk above.
+# The usual path for this project is:
+sudo rm -f /var/lib/libvirt/images/ubuntu-settings-test.qcow2
+```
+
+Confirm that no project domain remains:
+
+```sh
+sudo virsh -c qemu:///system list --all --name | grep -Fx ubuntu-settings-test \
+  && echo 'still present' || echo 'VM definition is gone'
+```
+
+For a completely fresh project download as well, remove the cached installer
+files. This is optional—neither file contains installed VM state, and retaining
+the completed ISO makes the next spawn much faster:
+
+```sh
+rm -f ubuntu-24.04.4-desktop-amd64.iso \
+      ubuntu-24.04.4-desktop-amd64.iso.part \
+      seed/cidata.iso
+```
+
+Do not delete `/var/lib/libvirt` or reset the `default` network: both are shared
+libvirt resources and may contain or support unrelated VMs. `spawn.sh` needs
+the default network and will start it automatically.
+
 ## Troubleshooting an autoinstall failure
 
 Do **not** shut down or reboot the VM when the installer shows its error. The

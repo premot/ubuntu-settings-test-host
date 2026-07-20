@@ -1,0 +1,137 @@
+diff --git a/README.md b/README.md
+index 5cb0b48..4b04f0b 100644
+--- a/README.md
++++ b/README.md
+@@ -1,12 +1,11 @@
+ # Ubuntu Settings Test Host
+ 
+ Creates a disposable Ubuntu Desktop VM using the supplied unattended-install
+-configuration. The current implementation uses Ubuntu's **NoCloud-over-HTTP**
+-autoinstall method: the guest fetches `seed/meta-data` and `seed/user-data`
+-from the host at `192.168.122.1:3003`.
++configuration. `virt-install` places `seed/meta-data` and `seed/user-data` on a
++temporary NoCloud config drive, so installer startup does not depend on guest
++networking or a host firewall exception.
+ 
+-It expects libvirt's default NAT network, whose host address is normally
+-`192.168.122.1`.
++The VM uses libvirt's default NAT network for normal network access.
+ 
+ ```sh
+ ./spawn.sh
+@@ -42,9 +41,7 @@ sudo virsh snapshot-revert ubuntu-settings-test before-setup
+ 
+ Do **not** shut down or reboot the VM when the installer shows its error. The
+ installer, cloud-init, and journal logs are initially in the live environment;
+-rebooting can discard the most useful evidence. Also leave the terminal that
+-ran `spawn.sh` open until the following capture is complete, because that
+-process owns the seed web server.
++rebooting can discard the most useful evidence.
+ 
+ The generic Desktop installer error dialog is not the useful error. The useful
+ logs are usually `/var/log/installer/subiquity-server-debug.log`,
+@@ -152,56 +149,15 @@ The QEMU log confirms the kernel arguments actually supplied to the VM. It does
+ not normally contain the installer exception, which is why the in-VM archive in
+ the previous section is important.
+ 
+-### 3. Record whether the seed was fetched
++### 3. Check whether NoCloud was discovered
+ 
+-For a repeat attempt, temporarily change the web-server launch in `spawn.sh`
+-from:
++In the live VM, run:
+ 
+ ```sh
+-python3 -m http.server 3003 --directory seed --bind 0.0.0.0 &
++cloud-init status --long
+ ```
+ 
+-to:
+-
+-```sh
+-python3 -m http.server 3003 --directory seed --bind 0.0.0.0 \
+-  >seed-http.log 2>&1 &
+-```
+-
+-After the failure, `seed-http.log` should show successful requests for both
+-`/meta-data` and `/user-data`.
+-
+-- **No requests**: the guest did not reach the NoCloud HTTP datasource. Check
+-  `ip-route.txt` and `nocloud-user-data-fetch.txt` from the captured archive.
+-- **Both files return HTTP 200**: NoCloud was reached; use the Subiquity,
+-  Curtin, and cloud-init logs to find the actual installer exception.
+-- **A request returns 404**: the server is not being started from the expected
+-  `seed/` directory or the seed filenames have changed.
+-
+-The configured kernel argument is intentionally quoted in `spawn.sh`:
+-
+-```text
+-autoinstall ds=nocloud-net;s=http://192.168.122.1:3003/
+-```
+-
+-The trailing slash is required, and the quoting prevents the shell from
+-interpreting the semicolon.
+-
+-## More reliable local alternative: a NoCloud config-drive
+-
+-NoCloud-over-HTTP is a supported autoinstall mechanism, but a local libvirt VM
+-can avoid its network dependency by attaching a NoCloud config-drive ISO. This
+-is often the more reliable option after an HTTP-based attempt fails.
+-
+-Create it on the host:
+-
+-```sh
+-sudo apt-get install -y cloud-image-utils
+-cloud-localds --filesystem iso seed/cidata.iso seed/user-data seed/meta-data
+-```
+-
+-Then attach `seed/cidata.iso` to `virt-install` as a readonly CD-ROM and use
+-`--extra-args 'autoinstall'`. `cloud-localds` labels the media `cidata`, which
+-cloud-init discovers locally. This removes the temporary HTTP server, the
+-hard-coded gateway address, and early-boot guest networking from the
+-installation path.
++The datasource should be NoCloud and should refer to the attached config drive.
++`DataSourceNone` means the installer did not discover the seed, so it will not
++start the unattended installation. The VM disk remaining at zero writes is
++another strong indication that installation never began.
+diff --git a/spawn.sh b/spawn.sh
+index 170b4b1..23f9f89 100755
+--- a/spawn.sh
++++ b/spawn.sh
+@@ -2,14 +2,14 @@
+ set -e
+ 
+ missing=
+-for command in curl python3 virt-install virsh qemu-system-x86_64; do
++for command in curl virt-install virsh qemu-system-x86_64; do
+   command -v "$command" >/dev/null 2>&1 || missing=1
+ done
+ 
+ if [ "$missing" ]; then
+   if command -v apt-get >/dev/null 2>&1; then
+     sudo apt-get update
+-    sudo apt-get install -y curl python3 virtinst libvirt-daemon-system qemu-system-x86
++    sudo apt-get install -y curl virtinst libvirt-daemon-system qemu-system-x86
+   else
+     echo "Missing dependencies. On NixOS, run ./spawn-nixos.sh after enabling virtualisation.libvirtd." >&2
+     exit 1
+@@ -33,10 +33,6 @@ if [ ! -f "$ISO" ]; then
+   curl -fL -C - -o "$ISO.part" "https://releases.ubuntu.com/noble/$ISO"
+   mv "$ISO.part" "$ISO"
+ fi
+-python3 -m http.server 3003 --directory seed --bind 0.0.0.0 &
+-server=$!
+-trap 'kill "$server"' EXIT INT TERM
+-
+ sudo virt-install \
+   --name ubuntu-settings-test \
+   --memory 4096 \
+@@ -44,6 +40,7 @@ sudo virt-install \
+   --disk size=32,bus=virtio \
+   --os-variant ubuntu24.04 \
+   --location "$ISO",kernel=casper/vmlinuz,initrd=casper/initrd \
+-  --extra-args 'autoinstall ds=nocloud-net;s=http://192.168.122.1:3003/' \
++  --cloud-init user-data=seed/user-data,meta-data=seed/meta-data \
++  --extra-args 'autoinstall' \
+   --graphics spice
+ #  --noautoconsole
