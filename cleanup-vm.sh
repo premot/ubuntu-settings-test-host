@@ -34,7 +34,6 @@ if [ -s "$tmp" ]; then
 else
   echo "  (none found)"
 fi
-printf "--- Deleting ---"
 
 if [ "$domain_exists" = true ]; then
   state=$(sudo virsh -c "$URI" domstate "$VM" 2>/dev/null || true)
